@@ -1,0 +1,209 @@
+<!DOCTYPE html><html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Catatan Tabungan Pribadi</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .dark-mode {
+      background-color: #1f2937;
+      color: white;
+    }
+    .light-mode {
+      background-color: white;
+      color: black;
+    }
+  </style>
+</head>
+<body class="light-mode transition duration-300" id="body">
+  <header class="p-4 flex justify-between items-center bg-blue-500 text-white">
+    <h1 class="text-xl font-bold">Catatan Tabungan Pribadi</h1>
+    <button onclick="toggleDarkMode()" class="bg-white text-blue-500 px-3 py-1 rounded shadow">
+      🌙 / ☀️
+    </button>
+  </header>  <main class="p-4 max-w-4xl mx-auto space-y-6">
+    <section class="bg-gray-100 p-4 rounded shadow">
+      <h2 class="text-lg font-semibold mb-2">Tambah Transaksi</h2>
+      <form id="transaction-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <input type="date" id="date" required class="p-2 rounded border" />
+        <input type="number" id="amount" placeholder="Nominal" required class="p-2 rounded border" />
+        <select id="type" class="p-2 rounded border">
+          <option value="income">Pemasukan</option>
+          <option value="expense">Pengeluaran</option>
+        </select>
+        <input type="text" id="category" placeholder="Kategori" required class="p-2 rounded border" />
+        <input type="text" id="note" placeholder="Catatan (opsional)" class="p-2 rounded border col-span-full" />
+        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded col-span-full">Simpan</button>
+      </form>
+    </section><section class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
+  <div class="bg-green-100 p-4 rounded shadow">
+    <h3 class="font-bold">Saldo</h3>
+    <p id="balance">Rp 0</p>
+  </div>
+  <div class="bg-blue-100 p-4 rounded shadow">
+    <h3 class="font-bold">Total Pemasukan</h3>
+    <p id="total-income">Rp 0</p>
+  </div>
+  <div class="bg-red-100 p-4 rounded shadow">
+    <h3 class="font-bold">Total Pengeluaran</h3>
+    <p id="total-expense">Rp 0</p>
+  </div>
+</section>
+
+<section>
+  <h2 class="text-lg font-semibold mb-2">Daftar Transaksi</h2>
+  <table class="w-full text-left border">
+    <thead>
+      <tr>
+        <th class="border p-2">Tanggal</th>
+        <th class="border p-2">Jenis</th>
+        <th class="border p-2">Kategori</th>
+        <th class="border p-2">Nominal</th>
+        <th class="border p-2">Catatan</th>
+        <th class="border p-2">Aksi</th>
+      </tr>
+    </thead>
+    <tbody id="transaction-table"></tbody>
+  </table>
+</section>
+
+<section class="bg-white p-4 rounded shadow">
+  <h2 class="text-lg font-semibold mb-4">Grafik</h2>
+  <canvas id="pieChart"></canvas>
+  <canvas id="barChart" class="mt-6"></canvas>
+</section>
+
+<section class="flex gap-4">
+  <button onclick="exportJSON()" class="bg-green-500 text-white px-4 py-2 rounded">Export JSON</button>
+  <button onclick="exportCSV()" class="bg-yellow-500 text-white px-4 py-2 rounded">Export CSV</button>
+</section>
+
+  </main>  <script>
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+    function saveTransactions() {
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+      renderTransactions();
+      updateSummary();
+      updateCharts();
+    }
+
+    document.getElementById('transaction-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const date = document.getElementById('date').value;
+      const amount = parseFloat(document.getElementById('amount').value);
+      const type = document.getElementById('type').value;
+      const category = document.getElementById('category').value;
+      const note = document.getElementById('note').value;
+
+      transactions.push({ date, amount, type, category, note });
+      saveTransactions();
+      this.reset();
+    });
+
+    function renderTransactions() {
+      const table = document.getElementById('transaction-table');
+      table.innerHTML = '';
+      transactions.forEach((t, index) => {
+        table.innerHTML += `
+          <tr>
+            <td class="border p-2">${t.date}</td>
+            <td class="border p-2">${t.type}</td>
+            <td class="border p-2">${t.category}</td>
+            <td class="border p-2">Rp ${t.amount.toLocaleString()}</td>
+            <td class="border p-2">${t.note}</td>
+            <td class="border p-2"><button onclick="deleteTransaction(${index})" class="text-red-500">Hapus</button></td>
+          </tr>
+        `;
+      });
+    }
+
+    function deleteTransaction(index) {
+      transactions.splice(index, 1);
+      saveTransactions();
+    }
+
+    function updateSummary() {
+      let income = 0;
+      let expense = 0;
+      transactions.forEach(t => {
+        if (t.type === 'income') income += t.amount;
+        else expense += t.amount;
+      });
+      document.getElementById('balance').innerText = `Rp ${(income - expense).toLocaleString()}`;
+      document.getElementById('total-income').innerText = `Rp ${income.toLocaleString()}`;
+      document.getElementById('total-expense').innerText = `Rp ${expense.toLocaleString()}`;
+    }
+
+    function toggleDarkMode() {
+      const body = document.getElementById('body');
+      body.classList.toggle('dark-mode');
+      body.classList.toggle('light-mode');
+    }
+
+    function updateCharts() {
+      const ctx1 = document.getElementById('pieChart').getContext('2d');
+      const ctx2 = document.getElementById('barChart').getContext('2d');
+      const income = transactions.filter(t => t.type === 'income').reduce((a, b) => a + b.amount, 0);
+      const expense = transactions.filter(t => t.type === 'expense').reduce((a, b) => a + b.amount, 0);
+
+      new Chart(ctx1, {
+        type: 'pie',
+        data: {
+          labels: ['Pemasukan', 'Pengeluaran'],
+          datasets: [{
+            data: [income, expense],
+            backgroundColor: ['#3b82f6', '#ef4444']
+          }]
+        },
+        options: { responsive: true }
+      });
+
+      const categories = {};
+      transactions.filter(t => t.type === 'expense').forEach(t => {
+        categories[t.category] = (categories[t.category] || 0) + t.amount;
+      });
+
+      new Chart(ctx2, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(categories),
+          datasets: [{
+            label: 'Pengeluaran per Kategori',
+            data: Object.values(categories),
+            backgroundColor: '#f59e0b'
+          }]
+        },
+        options: { responsive: true }
+      });
+    }
+
+    function exportJSON() {
+      const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'data-tabungan.json';
+      a.click();
+    }
+
+    function exportCSV() {
+      let csv = 'Tanggal,Jenis,Kategori,Nominal,Catatan\n';
+      transactions.forEach(t => {
+        csv += `${t.date},${t.type},${t.category},${t.amount},${t.note}\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'data-tabungan.csv';
+      a.click();
+    }
+
+    // Initial render
+    renderTransactions();
+    updateSummary();
+    updateCharts();
+  </script></body>
+</html>
